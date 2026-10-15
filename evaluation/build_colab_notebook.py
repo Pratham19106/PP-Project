@@ -11,19 +11,6 @@ def create_notebook():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     nb_path = os.path.join(base_dir, "evaluation", "Exact_MVC_GPU_Research_Colab_Suite.ipynb")
 
-    # Read modified source files to embed in notebook cells for 100% standalone execution
-    with open(os.path.join(base_dir, "solver_variant_c_lazy", "src", "Counters.cuh"), "r", encoding="utf-8") as f:
-        counters_cuh_content = f.read()
-
-    with open(os.path.join(base_dir, "solver_variant_c_lazy", "src", "GlobalWorkList.cuh"), "r", encoding="utf-8") as f:
-        gwl_c_content = f.read()
-
-    with open(os.path.join(base_dir, "solver_variant_c_lazy", "src", "LocalStacks.cuh"), "r", encoding="utf-8") as f:
-        ls_c_content = f.read()
-
-    with open(os.path.join(base_dir, "solver_variant_d_full", "src", "helperFunctions.cuh"), "r", encoding="utf-8") as f:
-        hf_d_content = f.read()
-
     cells = []
 
     def add_md(text):
@@ -91,53 +78,30 @@ elif "H100" in gpu_name:
 print(f"Optimal Compute Architecture: {compute_arch}")
 print("="*70)""")
 
-    # Cell 2: Clone Base Repos & Setup Workspaces
-    add_code(f"""# 2. Automated Workspace Setup & Codebase Deployment
-# Clones both 2022 and 2026 foundational repositories and applies Variant C & Variant D optimizations
+    # Cell 2: Clone User Repository Directly
+    add_code("""# 2. Automated Workspace Setup & Repository Deployment
+# Clones the unified research repository containing all 4 ablation variants and test data
+import os
 import shutil
 
-WORKDIR = "/content/mvc_gpu_research"
-os.makedirs(WORKDIR, exist_ok=True)
+WORKDIR = "/content/PP-Project"
+
+if not os.path.exists(WORKDIR):
+    print("Cloning research repository from GitHub...")
+    !git clone https://github.com/Pratham19106/PP-Project.git {WORKDIR}
+else:
+    print("Updating existing repository with latest commits...")
+    %cd {WORKDIR}
+    !git pull
+
 os.chdir(WORKDIR)
 
-print("Cloning foundational 2022 and 2026 repositories...")
-if not os.path.exists("component-aware-vertex-cover-gpu"):
-    !git clone https://github.com/HusseinAmro/component-aware-vertex-cover-gpu.git
-if not os.path.exists("Parallel-Vertex-Cover-Algorithms-on-GPUs"):
-    !git clone https://github.com/pky00/Parallel-Vertex-Cover-Algorithms-on-GPUs.git
+print("\\nVerifying repository directories:")
+for d in ["Parallel-Vertex-Cover-Algorithms-on-GPUs", "component-aware-vertex-cover-gpu", "solver_variant_c_lazy", "solver_variant_d_full"]:
+    status = "READY" if os.path.exists(d) else "MISSING"
+    print(f"  [{status}] {d}")
 
-print("Creating Variant C (Lazy Trigger) and Variant D (Full Solver) directories...")
-if not os.path.exists("solver_variant_c_lazy"):
-    shutil.copytree("component-aware-vertex-cover-gpu", "solver_variant_c_lazy")
-if not os.path.exists("solver_variant_d_full"):
-    shutil.copytree("component-aware-vertex-cover-gpu", "solver_variant_d_full")
-
-# Inject optimized Variant C files
-print("Deploying Variant C (Addition 1: Lazy Trigger) optimizations...")
-with open("solver_variant_c_lazy/src/Counters.cuh", "w") as f:
-    f.write({repr(counters_cuh_content)})
-
-with open("solver_variant_c_lazy/src/GlobalWorkList.cuh", "w") as f:
-    f.write({repr(gwl_c_content)})
-
-with open("solver_variant_c_lazy/src/LocalStacks.cuh", "w") as f:
-    f.write({repr(ls_c_content)})
-
-# Inject optimized Variant D files (Variant C + Addition 2: Analytic Tree & Cycle Fast-Path)
-print("Deploying Variant D (Addition 1 + Addition 2: Lazy + Analytic Fast-Path) optimizations...")
-with open("solver_variant_d_full/src/Counters.cuh", "w") as f:
-    f.write({repr(counters_cuh_content)})
-
-with open("solver_variant_d_full/src/GlobalWorkList.cuh", "w") as f:
-    f.write({repr(gwl_c_content)})
-
-with open("solver_variant_d_full/src/LocalStacks.cuh", "w") as f:
-    f.write({repr(ls_c_content)})
-
-with open("solver_variant_d_full/src/helperFunctions.cuh", "w") as f:
-    f.write({repr(hf_d_content)})
-
-print(">>> All 4 Solver Variants successfully deployed and ready for compilation! <<<")""")
+print("\\n>>> Workspace successfully deployed and ready for compilation! <<<")""")
 
     # Cell 3: Compilation (Two Passes: Timing Pass & Telemetry Pass)
     add_code("""# 3. Two-Pass Compilation Protocol
@@ -167,10 +131,10 @@ def configure_and_compile(repo_path, use_counters=0, arch="sm_75"):
     return True
 
 VARIANTS = {
-    "Variant_A_2022": "/content/mvc_gpu_research/Parallel-Vertex-Cover-Algorithms-on-GPUs",
-    "Variant_B_2026": "/content/mvc_gpu_research/component-aware-vertex-cover-gpu",
-    "Variant_C_Lazy": "/content/mvc_gpu_research/solver_variant_c_lazy",
-    "Variant_D_Full": "/content/mvc_gpu_research/solver_variant_d_full"
+    "Variant_A_2022": "/content/PP-Project/Parallel-Vertex-Cover-Algorithms-on-GPUs",
+    "Variant_B_2026": "/content/PP-Project/component-aware-vertex-cover-gpu",
+    "Variant_C_Lazy": "/content/PP-Project/solver_variant_c_lazy",
+    "Variant_D_Full": "/content/PP-Project/solver_variant_d_full"
 }
 
 print("="*70)
@@ -188,14 +152,14 @@ print("="*70)
 print("All binaries compiled successfully!")""")
 
     # Cell 4: Ablation Benchmark Runner
-    add_code("""# 4. Multi-Instance Ablation Benchmark Runner
+    add_code(r"""# 4. Multi-Instance Ablation Benchmark Runner
 import time
 import pandas as pd
 import re
 
-DATA_DIR = "/content/mvc_gpu_research/component-aware-vertex-cover-gpu/data"
+DATA_DIR = "/content/PP-Project/component-aware-vertex-cover-gpu/data"
 
-# Select representative benchmarks: Category 1 (Sparse / Scale-Free) & Category 2 (Dense / Cliques)
+# Representative benchmarks: Category 1 (Sparse / Scale-Free) & Category 2 (Dense / Cliques)
 BENCHMARKS = [
     "qc324.txt",
     "mhda416.txt",
@@ -227,7 +191,6 @@ for graph_file in BENCHMARKS:
         elapsed = time.time() - t0
         
         out = res.stdout
-        # Extract MVC Size
         mvc_val = None
         m = re.search(r'Minimum is:\s*(\d+)', out)
         if m:
@@ -251,13 +214,14 @@ for graph_file in BENCHMARKS:
         print(f"{graph_file.replace('.txt',''):<20} | {v_name:<18} | {str(mvc_val):<10} | {elapsed:<10.4f} | {status}")
 
 df_results = pd.DataFrame(results)
-df_results.to_csv("/content/mvc_gpu_research/results_ablation.csv", index=False)
+os.makedirs("/content/PP-Project/evaluation", exist_ok=True)
+df_results.to_csv("/content/PP-Project/evaluation/results_ablation.csv", index=False)
 print("="*85)
-print("Benchmark sweep completed! Saved to /content/mvc_gpu_research/results_ablation.csv")""")
+print("Benchmark sweep completed! Saved to /content/PP-Project/evaluation/results_ablation.csv")""")
 
     # Cell 5: Automated Verification
     add_code("""# 5. Exactness Verification Pass against Ground-Truth MVCs.txt
-GT_PATH = "/content/mvc_gpu_research/component-aware-vertex-cover-gpu/src/MVCs.txt"
+GT_PATH = "/content/PP-Project/component-aware-vertex-cover-gpu/src/MVCs.txt"
 
 ground_truths = {}
 if os.path.exists(GT_PATH):
@@ -344,8 +308,8 @@ for graph_file in BENCHMARKS:
         })
 
 df_telemetry = pd.DataFrame(telemetry_records)
-df_telemetry.to_csv("/content/mvc_gpu_research/summary_telemetry.csv", index=False)
-print("Telemetry pass complete. Summary saved to /content/mvc_gpu_research/summary_telemetry.csv")
+df_telemetry.to_csv("/content/PP-Project/evaluation/summary_telemetry.csv", index=False)
+print("Telemetry pass complete. Summary saved to /content/PP-Project/evaluation/summary_telemetry.csv")
 df_telemetry.head(10)""")
 
     # Cell 7: Publication-Quality Plot Generation
@@ -353,7 +317,7 @@ df_telemetry.head(10)""")
 import matplotlib.pyplot as plt
 import numpy as np
 
-FIGURES_DIR = "/content/mvc_gpu_research/paper_figures"
+FIGURES_DIR = "/content/PP-Project/paper/figures"
 os.makedirs(FIGURES_DIR, exist_ok=True)
 
 plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
@@ -441,7 +405,7 @@ import zipfile
 
 OUTPUT_ZIP = "/content/Exact_MVC_GPU_Paper_Results.zip"
 with zipfile.ZipFile(OUTPUT_ZIP, "w", zipfile.ZIP_DEFLATED) as z:
-    for f in ["/content/mvc_gpu_research/results_ablation.csv", "/content/mvc_gpu_research/summary_telemetry.csv"]:
+    for f in ["/content/PP-Project/evaluation/results_ablation.csv", "/content/PP-Project/evaluation/summary_telemetry.csv"]:
         if os.path.exists(f):
             z.write(f, os.path.basename(f))
     for f in os.listdir(FIGURES_DIR):
@@ -480,4 +444,3 @@ files.download(OUTPUT_ZIP)""")
 
 if __name__ == "__main__":
     create_notebook()
-
