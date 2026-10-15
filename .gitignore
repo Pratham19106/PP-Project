@@ -1,0 +1,21 @@
+# Build artifacts
+*.o
+*.obj
+*.exe
+output
+*.out
+
+*graphify*/
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+
+# OS artifacts
+Thumbs.db
+.DS_Store
+
+# Temporary results / logs
+*.log
+
