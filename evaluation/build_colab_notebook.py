@@ -86,13 +86,34 @@ import shutil
 
 WORKDIR = "/content/PP-Project"
 
+# If your repo is PRIVATE, enter your GitHub token below or use Colab Secrets (🔑 icon on the left)
+GITHUB_USERNAME = "Pratham19106"
+GITHUB_TOKEN = "" # <-- Paste your personal access token here if repo is private (e.g., 'ghp_...')
+
+try:
+    from google.colab import userdata
+    GITHUB_TOKEN = userdata.get('GITHUB_TOKEN') or GITHUB_TOKEN
+except Exception:
+    pass
+
 if not os.path.exists(WORKDIR):
     print("Cloning research repository from GitHub...")
-    !git clone https://github.com/Pratham19106/PP-Project.git {WORKDIR}
+    if GITHUB_TOKEN:
+        clone_url = f"https://{GITHUB_USERNAME}:{GITHUB_TOKEN}@github.com/Pratham19106/PP-Project.git"
+    else:
+        clone_url = "https://github.com/Pratham19106/PP-Project.git"
+    !git clone {clone_url} {WORKDIR}
 else:
     print("Updating existing repository with latest commits...")
     %cd {WORKDIR}
     !git pull
+
+if not os.path.exists(WORKDIR):
+    raise RuntimeError(
+        "Clone failed! Your GitHub repository 'Pratham19106/PP-Project' is PRIVATE.\\n"
+        "To fix: either make the repo PUBLIC on GitHub (Settings -> Danger Zone -> Change visibility -> Public),\\n"
+        "OR paste a GitHub Personal Access Token into GITHUB_TOKEN above."
+    )
 
 os.chdir(WORKDIR)
 
