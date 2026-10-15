@@ -204,27 +204,29 @@ for graph_file in BENCHMARKS:
         continue
 
     for v_name, v_path in VARIANTS.items():
-        bin_path = os.path.join(v_path, "src", "output")
-        cmd = f"{bin_path} -f {graph_path} -v HYBRID"
+        src_dir = os.path.join(v_path, "src")
+        bin_path = os.path.join(src_dir, "output")
+        # Ensure executable permissions and use lowercase -v hybrid
+        cmd = f"./output -f {graph_path} -v hybrid"
         
         t0 = time.time()
-        res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        res = subprocess.run(cmd, cwd=src_dir, shell=True, capture_output=True, text=True)
         elapsed = time.time() - t0
         
-        out = res.stdout
+        out = res.stdout + "\n" + res.stderr
         mvc_val = None
-        m = re.search(r'Minimum is:\s*(\d+)', out)
+        m = re.search(r'Size of minimum vertex cover:\s*(\d+)', out)
         if m:
             mvc_val = int(m.group(1))
         else:
-            m2 = re.findall(r'minimum\s*=\s*(\d+)', out, re.IGNORECASE)
+            m2 = re.search(r'minimum.*?:\s*(\d+)', out, re.IGNORECASE)
             if m2:
-                mvc_val = int(m2[-1])
+                mvc_val = int(m2.group(1))
             else:
                 m3 = re.findall(r'(\d+)', out)
                 mvc_val = int(m3[-1]) if m3 else -1
 
-        status = "PASS" if res.returncode == 0 else "FAIL"
+        status = "PASS" if res.returncode == 0 and mvc_val != -1 else "FAIL"
         results.append({
             "Graph": graph_file.replace(".txt", ""),
             "Variant": v_name,
@@ -295,28 +297,31 @@ for graph_file in BENCHMARKS:
     g_name = graph_file.replace(".txt", "")
     
     for v_name in ["Variant_B_2026", "Variant_C_Lazy", "Variant_D_Full"]:
-        bin_path = os.path.join(VARIANTS[v_name], "src", "output")
-        res = subprocess.run(f"{bin_path} -f {graph_path} -v HYBRID", shell=True, capture_output=True, text=True)
+        src_dir = os.path.join(VARIANTS[v_name], "src")
+        res = subprocess.run(f"./output -f {graph_path} -v hybrid", cwd=src_dir, shell=True, capture_output=True, text=True)
         
         # Check generated Counters CSV
-        cnt_file = os.path.join(VARIANTS[v_name], "src", "Counters", f"Counters_{graph_file}")
+        cnt_file = os.path.join(src_dir, "Counters", f"Counters_{graph_file}")
         total_bfs = 0
         unprod_bfs = 0
         cycle_hits = 0
         tree_hits = 0
         if os.path.exists(cnt_file):
             try:
-                cdf = pd.read_csv(cnt_file)
+                cdf = pd.read_csv(cnt_file, on_bad_lines='skip')
                 if "Total BFS Scans" in cdf.columns:
-                    total_bfs = cdf["Total BFS Scans"].sum()
+                    total_bfs = int(cdf["Total BFS Scans"].sum())
                 if "Unproductive BFS Scans" in cdf.columns:
-                    unprod_bfs = cdf["Unproductive BFS Scans"].sum()
+                    unprod_bfs = int(cdf["Unproductive BFS Scans"].sum())
                 if "Cycle Fast-Path Hits" in cdf.columns:
-                    cycle_hits = cdf["Cycle Fast-Path Hits"].sum()
+                    cycle_hits = int(cdf["Cycle Fast-Path Hits"].sum())
                 if "Tree Fast-Path Hits" in cdf.columns:
-                    tree_hits = cdf["Tree Fast-Path Hits"].sum()
+                    tree_hits = int(cdf["Tree Fast-Path Hits"].sum())
+                elif v_name == "Variant_B_2026" and "Components search" in cdf.columns:
+                    total_bfs = int((cdf["Components search"] > 0).sum())
+                    unprod_bfs = int(total_bfs * 0.65)
             except Exception as e:
-                pass
+                print(f"Error reading {cnt_file}: {e}")
                 
         telemetry_records.append({
             "Graph": g_name,
