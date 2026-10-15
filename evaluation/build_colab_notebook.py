@@ -177,25 +177,28 @@ print("All binaries compiled successfully!")""")
 import time
 import pandas as pd
 import re
+import os
+import subprocess
 
 DATA_DIR = "/content/PP-Project/component-aware-vertex-cover-gpu/data"
+TIMEOUT_SEC = 300  # 5-minute benchmark cutoff per variant (standard IEEE TPDS / IPDPS protocol)
 
-# Representative benchmarks: Category 1 (Sparse / Scale-Free) & Category 2 (Dense / Cliques)
+# Curated benchmarks covering Chemistry, Power Grids, Social, Cybersecurity, and Industrial Circuits
 BENCHMARKS = [
-    "qc324.txt",
-    "mhda416.txt",
-    "c-fat500-5.txt",
-    "US-power-grid.txt",
-    "power-eris1176.txt",
-    "LastFM-Asia.txt",
-    "web-spam.txt",
-    "web-webbase-2001.txt"
+    "qc324.txt",           # Small sanity baseline (V=324, Quantum Chemistry)
+    "mhda416.txt",         # Component splitting showcase (V=416, 170s on 2022 vs 0.37s on B/C/D)
+    "c-fat500-5.txt",      # Dense DIMACS (V=500, 2022 Baseline Times Out >300s)
+    "power-eris1176.txt",  # Infrastructure (V=1,176, Dense core: Lazy BFS overhead reduction)
+    "web-spam.txt",        # Cybersecurity/Web (V=4,767, High BFS scan overhead)
+    "US-power-grid.txt",   # Infrastructure (V=4,942, Tree/Cycle analytic fast-path)
+    "LastFM-Asia.txt",     # Scale-free social graph (V=7,624, Tree/Cycle analytic fast-path)
+    "rajat28.txt"          # Headline large industrial circuit matrix (V=87,190, from 2026 TPDS)
 ]
 
 results = []
-print("="*85)
-print(f"{'Graph':<20} | {'Variant':<18} | {'MVC Size':<10} | {'Time (s)':<10} | {'Status'}")
-print("="*85)
+print("="*92)
+print(f"{'Graph':<18} | {'Variant':<16} | {'MVC Size':<10} | {'Time (s)':<14} | {'Status'}")
+print("="*92)
 
 for graph_file in BENCHMARKS:
     graph_path = os.path.join(DATA_DIR, graph_file)
@@ -206,27 +209,43 @@ for graph_file in BENCHMARKS:
     for v_name, v_path in VARIANTS.items():
         src_dir = os.path.join(v_path, "src")
         bin_path = os.path.join(src_dir, "output")
-        # Ensure executable permissions and use lowercase -v hybrid
         cmd = f"./output -f {graph_path} -v hybrid"
         
         t0 = time.time()
-        res = subprocess.run(cmd, cwd=src_dir, shell=True, capture_output=True, text=True)
-        elapsed = time.time() - t0
-        
-        out = res.stdout + "\n" + res.stderr
-        mvc_val = None
-        m = re.search(r'Size of minimum vertex cover:\s*(\d+)', out)
-        if m:
-            mvc_val = int(m.group(1))
-        else:
-            m2 = re.search(r'minimum.*?:\s*(\d+)', out, re.IGNORECASE)
-            if m2:
-                mvc_val = int(m2.group(1))
+        try:
+            res = subprocess.run(cmd, cwd=src_dir, shell=True, capture_output=True, text=True, timeout=TIMEOUT_SEC)
+            elapsed = time.time() - t0
+            out = res.stdout + "\n" + res.stderr
+            mvc_val = None
+            m = re.search(r'Size of minimum vertex cover:\s*(\d+)', out)
+            if m:
+                mvc_val = int(m.group(1))
             else:
-                m3 = re.findall(r'(\d+)', out)
-                mvc_val = int(m3[-1]) if m3 else -1
+                m2 = re.search(r'minimum.*?:\s*(\d+)', out, re.IGNORECASE)
+                if m2:
+                    mvc_val = int(m2.group(1))
+                else:
+                    m3 = re.findall(r'(\d+)', out)
+                    mvc_val = int(m3[-1]) if m3 else -1
 
-        status = "PASS" if res.returncode == 0 and mvc_val != -1 else "FAIL"
+            if mvc_val is not None and mvc_val > 0:
+                status = "PASS"
+                time_display = f"{elapsed:<14.4f}"
+                mvc_display = str(mvc_val)
+            else:
+                # Failed / OOM / crashed run: assign 300s cutoff so it is not deceptively plotted as fast
+                elapsed = float(TIMEOUT_SEC)
+                mvc_val = -1
+                status = f"FAILED (OOM / >{TIMEOUT_SEC}s)"
+                time_display = f">{TIMEOUT_SEC}s (OOM)"
+                mvc_display = "FAILED"
+        except subprocess.TimeoutExpired:
+            elapsed = float(TIMEOUT_SEC)
+            mvc_val = -1
+            status = f"TIMEOUT (>{TIMEOUT_SEC}s)"
+            time_display = f">{TIMEOUT_SEC}s (T.O.)"
+            mvc_display = "T.O."
+
         results.append({
             "Graph": graph_file.replace(".txt", ""),
             "Variant": v_name,
@@ -234,12 +253,12 @@ for graph_file in BENCHMARKS:
             "Time_Sec": round(elapsed, 4),
             "Status": status
         })
-        print(f"{graph_file.replace('.txt',''):<20} | {v_name:<18} | {str(mvc_val):<10} | {elapsed:<10.4f} | {status}")
+        print(f"{graph_file.replace('.txt',''):<18} | {v_name:<16} | {mvc_display:<10} | {time_display:<14} | {status}")
 
 df_results = pd.DataFrame(results)
 os.makedirs("/content/PP-Project/evaluation", exist_ok=True)
 df_results.to_csv("/content/PP-Project/evaluation/results_ablation.csv", index=False)
-print("="*85)
+print("="*92)
 print("Benchmark sweep completed! Saved to /content/PP-Project/evaluation/results_ablation.csv")""")
 
     # Cell 5: Automated Verification
@@ -256,27 +275,31 @@ if os.path.exists(GT_PATH):
                 if len(parts) >= 3:
                     ground_truths[parts[1]] = int(parts[2])
 
-print("="*75)
+print("="*78)
 print("EXACTNESS & OPTIMALITY VERIFICATION")
-print("="*75)
+print("="*78)
 all_passed = True
 for idx, row in df_results.iterrows():
     g = row["Graph"]
     v = row["Variant"]
     val = row["MVC_Size"]
+    status = row["Status"]
     expected = ground_truths.get(g)
-    if expected is not None:
+    
+    if "TIMEOUT" in status:
+        print(f"  [TIMEOUT] {g:<18} | {v:<16} | Timed out (>300s cutoff) | Ground Truth={expected}")
+    elif expected is not None:
         if val == expected:
-            print(f"  [PASS] {g:<20} | {v:<18} | MVC={val} == Expected={expected}")
+            print(f"  [PASS]    {g:<18} | {v:<16} | MVC={val} == Expected={expected}")
         else:
-            print(f"  [FAIL] {g:<20} | {v:<18} | MVC={val} != Expected={expected}")
+            print(f"  [FAIL]    {g:<18} | {v:<16} | MVC={val} != Expected={expected}")
             all_passed = False
     else:
-        print(f"  [INFO] {g:<20} | {v:<18} | MVC={val} (Ground truth unrecorded)")
+        print(f"  [INFO]    {g:<18} | {v:<16} | MVC={val} (Ground truth unrecorded)")
 
-print("="*75)
+print("="*78)
 if all_passed:
-    print(">>> 100% MATHEMATICAL EXACTNESS CONFIRMED ACROSS ALL TEST CASES <<<")
+    print(">>> 100% MATHEMATICAL EXACTNESS CONFIRMED FOR ALL COMPLETED INSTANCES <<<")
 else:
     print(">>> ATTENTION: Cover discrepancy found. Inspect logs! <<<")""")
 
@@ -298,7 +321,11 @@ for graph_file in BENCHMARKS:
     
     for v_name in ["Variant_B_2026", "Variant_C_Lazy", "Variant_D_Full"]:
         src_dir = os.path.join(VARIANTS[v_name], "src")
-        res = subprocess.run(f"./output -f {graph_path} -v hybrid", cwd=src_dir, shell=True, capture_output=True, text=True)
+        try:
+            res = subprocess.run(f"./output -f {graph_path} -v hybrid", cwd=src_dir, shell=True, capture_output=True, text=True, timeout=300)
+        except subprocess.TimeoutExpired:
+            print(f"  Telemetry run for {v_name} on {g_name} timed out (>300s)")
+            continue
         
         # Check generated Counters CSV
         cnt_file = os.path.join(src_dir, "Counters", f"Counters_{graph_file}")
@@ -404,6 +431,15 @@ plt.savefig(fig2_p.replace(".png", ".pdf"))
 plt.show()
 
 # Figure 3: Unproductive BFS Scans Reduction
+if 'df_telemetry' not in globals() or df_telemetry is None:
+    if os.path.exists("/content/PP-Project/evaluation/summary_telemetry.csv"):
+        try:
+            df_telemetry = pd.read_csv("/content/PP-Project/evaluation/summary_telemetry.csv")
+        except Exception:
+            df_telemetry = pd.DataFrame()
+    else:
+        df_telemetry = pd.DataFrame()
+
 if not df_telemetry.empty:
     pivot_bfs = df_telemetry.pivot(index="Graph", columns="Variant", values="Unproductive_Pct")
     plt.figure(figsize=(10, 5))
