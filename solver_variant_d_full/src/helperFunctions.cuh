@@ -527,35 +527,19 @@ __device__ unsigned int bfsCC_StackOnly(unsigned int vertexNum, INT_OR_SHORT* ve
         } while (found_new_level);
         
         if (threadIdx.x == 0) {
-            s_degree_sum_i = 0;
-            s_max_deg_i = 0;
             s_fast_path_type = 0;
-            s_tree_cover = 0;
-        }
-        __syncthreads();
-
-        int local_deg_sum = 0;
-        int local_max_deg = 0;
-        for (unsigned int v = start; v < right + 1; v += blockDim.x) {
-            if (components[v] == 1 && vertexDegrees_s[v] > 0) {
-                int d = vertexDegrees_s[v];
-                local_deg_sum += d;
-                if (d > local_max_deg) local_max_deg = d;
-            }
-        }
-        atomicAdd(&s_degree_sum_i, local_deg_sum);
-        atomicMax(&s_max_deg_i, local_max_deg);
-        __syncthreads();
-
-        if (threadIdx.x == 0) {
-            int n_i = compSize;
-            int m_i = s_degree_sum_i / 2;
-            if (n_i >= 3 && m_i == n_i && s_max_deg_i == 2) {
-                s_fast_path_type = 1; // Simple Cycle
-            } else if (n_i >= 1 && m_i == n_i - 1) {
-                s_fast_path_type = 2; // Acyclic Tree / Star
-            } else if (n_i >= 2 && compStartingVertexDegree == n_i - 1 && !not_Clique_Cycle) {
-                s_fast_path_type = 3; // Clique
+            if (!not_Clique_Cycle) {
+                if (compSize >= 3 && compStartingVertexDegree == 2) {
+                    s_fast_path_type = 1; // Simple Cycle C_k: MVC = (compSize + 1) / 2
+                } else if (compSize >= 2 && compStartingVertexDegree == compSize - 1) {
+                    s_fast_path_type = 3; // Clique K_p: MVC = compSize - 1
+                } else if (compSize == 1) {
+                    s_fast_path_type = 2; // Singleton: MVC = 0
+                }
+            } else if (compSize <= 3) {
+                s_fast_path_type = 2; // K_2 or P_3: MVC = 1
+            } else if (compSize == 4) {
+                s_fast_path_type = 4; // Diamond graph (K_4 - e) with min_deg >= 2: MVC = 2
             }
         }
         __syncthreads();
@@ -571,82 +555,29 @@ __device__ unsigned int bfsCC_StackOnly(unsigned int vertexNum, INT_OR_SHORT* ve
                 --num_components;
             }
         } else if (s_fast_path_type == 2) {
-            if (compSize == 1) {
-                if (threadIdx.x == 0) {
-                    --num_components;
-                }
-            } else if (compSize == 2 || s_max_deg_i == compSize - 1) {
-                *numDeletedVertices += 1;
-                if (threadIdx.x == 0) {
-                    #if USE_COUNTERS
-                    blockCounters->totalTime[TREE_FAST_PATH_HITS]++;
-                    #endif
-                    stackNumDeletedVertices[parentIndex] += 1;
-                    --num_components;
-                }
-            } else {
-                __shared__ int selected_leaf;
-                __shared__ int parent_v;
-                while (true) {
-                    if (threadIdx.x == 0) {
-                        selected_leaf = -1;
-                        parent_v = -1;
-                    }
-                    __syncthreads();
-
-                    for (unsigned int v = start; v < right + 1; v += blockDim.x) {
-                        if (components[v] == 1 && vertexDegrees_s[v] == 1) {
-                            atomicMax(&selected_leaf, (int)v);
-                            break;
-                        }
-                    }
-                    __syncthreads();
-
-                    if (selected_leaf == -1) break;
-
-                    int u = selected_leaf;
-                    for (unsigned int e = graph.srcPtr[u] + threadIdx.x; e < graph.srcPtr[u + 1]; e += blockDim.x) {
-                        unsigned int nb = graph.dst[e];
-                        if (components[nb] == 1 && vertexDegrees_s[nb] > 0) {
-                            parent_v = (int)nb;
-                        }
-                    }
-                    __syncthreads();
-
-                    if (parent_v != -1) {
-                        int p = parent_v;
-                        for (unsigned int e = graph.srcPtr[p] + threadIdx.x; e < graph.srcPtr[p + 1]; e += blockDim.x) {
-                            unsigned int nb = graph.dst[e];
-                            if (components[nb] == 1 && vertexDegrees_s[nb] > 0) {
-                                atomicSub((int*)&vertexDegrees_s[nb], 1);
-                            }
-                        }
-                        __syncthreads();
-                        if (threadIdx.x == 0) {
-                            vertexDegrees_s[p] = 0;
-                            s_tree_cover += 1;
-                        }
-                        __syncthreads();
-                    } else {
-                        if (threadIdx.x == 0) vertexDegrees_s[u] = 0;
-                        __syncthreads();
-                    }
-                }
-
-                *numDeletedVertices += s_tree_cover;
-                if (threadIdx.x == 0) {
-                    #if USE_COUNTERS
-                    blockCounters->totalTime[TREE_FAST_PATH_HITS]++;
-                    #endif
-                    stackNumDeletedVertices[parentIndex] += s_tree_cover;
-                    --num_components;
-                }
+            int tree_cover = (compSize >= 2) ? 1 : 0;
+            *numDeletedVertices += tree_cover;
+            if (threadIdx.x == 0) {
+                #if USE_COUNTERS
+                if (tree_cover > 0) blockCounters->totalTime[TREE_FAST_PATH_HITS]++;
+                #endif
+                stackNumDeletedVertices[parentIndex] += tree_cover;
+                --num_components;
             }
         } else if (s_fast_path_type == 3) {
             int clique_cover = compSize - 1;
             *numDeletedVertices += clique_cover;
             if (threadIdx.x == 0) {
                 stackNumDeletedVertices[parentIndex] += clique_cover;
+                --num_components;
+            }
+        } else if (s_fast_path_type == 4) {
+            *numDeletedVertices += 2;
+            if (threadIdx.x == 0) {
+                #if USE_COUNTERS
+                blockCounters->totalTime[CYCLE_FAST_PATH_HITS]++;
+                #endif
+                stackNumDeletedVertices[parentIndex] += 2;
                 --num_components;
             }
         }
@@ -1280,35 +1211,19 @@ __device__ unsigned int bfsCC_Hybrid(unsigned int vertexNum, INT_OR_SHORT* verte
         } while (found_new_level);
 
         if (threadIdx.x == 0) {
-            s_degree_sum_i = 0;
-            s_max_deg_i = 0;
             s_fast_path_type = 0;
-            s_tree_cover = 0;
-        }
-        __syncthreads();
-
-        int local_deg_sum = 0;
-        int local_max_deg = 0;
-        for (unsigned int v = start; v < right + 1; v += blockDim.x) {
-            if (components[v] == 1 && vertexDegrees_s[v] > 0) {
-                int d = vertexDegrees_s[v];
-                local_deg_sum += d;
-                if (d > local_max_deg) local_max_deg = d;
-            }
-        }
-        atomicAdd(&s_degree_sum_i, local_deg_sum);
-        atomicMax(&s_max_deg_i, local_max_deg);
-        __syncthreads();
-
-        if (threadIdx.x == 0) {
-            int n_i = compSize;
-            int m_i = s_degree_sum_i / 2; // Undirected edge count
-            if (n_i >= 3 && m_i == n_i && s_max_deg_i == 2) {
-                s_fast_path_type = 1; // Simple Cycle
-            } else if (n_i >= 1 && m_i == n_i - 1) {
-                s_fast_path_type = 2; // Acyclic Tree / Star
-            } else if (n_i >= 2 && compStartingVertexDegree == n_i - 1 && !not_Clique_Cycle) {
-                s_fast_path_type = 3; // Clique
+            if (!not_Clique_Cycle) {
+                if (compSize >= 3 && compStartingVertexDegree == 2) {
+                    s_fast_path_type = 1; // Simple Cycle C_k: MVC = (compSize + 1) / 2
+                } else if (compSize >= 2 && compStartingVertexDegree == compSize - 1) {
+                    s_fast_path_type = 3; // Clique K_p: MVC = compSize - 1
+                } else if (compSize == 1) {
+                    s_fast_path_type = 2; // Singleton: MVC = 0
+                }
+            } else if (compSize <= 3) {
+                s_fast_path_type = 2; // K_2 or P_3: MVC = 1
+            } else if (compSize == 4) {
+                s_fast_path_type = 4; // Diamond graph (K_4 - e) with min_deg >= 2: MVC = 2
             }
         }
         __syncthreads();
@@ -1326,80 +1241,16 @@ __device__ unsigned int bfsCC_Hybrid(unsigned int vertexNum, INT_OR_SHORT* verte
                 --num_components;
             }
         } else if (s_fast_path_type == 2) {
-            if (compSize == 1) {
-                if (threadIdx.x == 0) {
-                    --num_components;
+            int tree_cover = (compSize >= 2) ? 1 : 0;
+            *numDeletedVertices += tree_cover;
+            if (threadIdx.x == 0) {
+                #if USE_COUNTERS
+                if (tree_cover > 0) blockCounters->totalTime[TREE_FAST_PATH_HITS]++;
+                #endif
+                if (num_components > 1 && tree_cover > 0) {
+                    atomicAdd((int*)&compArray.entries[parentArrayIndex].minimum, tree_cover);
                 }
-            } else if (compSize == 2 || s_max_deg_i == compSize - 1) {
-                *numDeletedVertices += 1;
-                if (threadIdx.x == 0) {
-                    #if USE_COUNTERS
-                    blockCounters->totalTime[TREE_FAST_PATH_HITS]++;
-                    #endif
-                    if (num_components > 1) {
-                        atomicAdd((int*)&compArray.entries[parentArrayIndex].minimum, 1);
-                    }
-                    --num_components;
-                }
-            } else {
-                __shared__ int selected_leaf;
-                __shared__ int parent_v;
-                while (true) {
-                    if (threadIdx.x == 0) {
-                        selected_leaf = -1;
-                        parent_v = -1;
-                    }
-                    __syncthreads();
-
-                    for (unsigned int v = start; v < right + 1; v += blockDim.x) {
-                        if (components[v] == 1 && vertexDegrees_s[v] == 1) {
-                            atomicMax(&selected_leaf, (int)v);
-                            break;
-                        }
-                    }
-                    __syncthreads();
-
-                    if (selected_leaf == -1) break;
-
-                    int u = selected_leaf;
-                    for (unsigned int e = graph.srcPtr[u] + threadIdx.x; e < graph.srcPtr[u + 1]; e += blockDim.x) {
-                        unsigned int nb = graph.dst[e];
-                        if (components[nb] == 1 && vertexDegrees_s[nb] > 0) {
-                            parent_v = (int)nb;
-                        }
-                    }
-                    __syncthreads();
-
-                    if (parent_v != -1) {
-                        int p = parent_v;
-                        for (unsigned int e = graph.srcPtr[p] + threadIdx.x; e < graph.srcPtr[p + 1]; e += blockDim.x) {
-                            unsigned int nb = graph.dst[e];
-                            if (components[nb] == 1 && vertexDegrees_s[nb] > 0) {
-                                atomicSub((int*)&vertexDegrees_s[nb], 1);
-                            }
-                        }
-                        __syncthreads();
-                        if (threadIdx.x == 0) {
-                            vertexDegrees_s[p] = 0;
-                            s_tree_cover += 1;
-                        }
-                        __syncthreads();
-                    } else {
-                        if (threadIdx.x == 0) vertexDegrees_s[u] = 0;
-                        __syncthreads();
-                    }
-                }
-
-                *numDeletedVertices += s_tree_cover;
-                if (threadIdx.x == 0) {
-                    #if USE_COUNTERS
-                    blockCounters->totalTime[TREE_FAST_PATH_HITS]++;
-                    #endif
-                    if (num_components > 1) {
-                        atomicAdd((int*)&compArray.entries[parentArrayIndex].minimum, s_tree_cover);
-                    }
-                    --num_components;
-                }
+                --num_components;
             }
         } else if (s_fast_path_type == 3) {
             int clique_cover = compSize - 1;
@@ -1407,6 +1258,17 @@ __device__ unsigned int bfsCC_Hybrid(unsigned int vertexNum, INT_OR_SHORT* verte
             if (threadIdx.x == 0) {
                 if (num_components > 1) {
                     atomicAdd((int*)&compArray.entries[parentArrayIndex].minimum, clique_cover);
+                }
+                --num_components;
+            }
+        } else if (s_fast_path_type == 4) {
+            *numDeletedVertices += 2;
+            if (threadIdx.x == 0) {
+                #if USE_COUNTERS
+                blockCounters->totalTime[CYCLE_FAST_PATH_HITS]++;
+                #endif
+                if (num_components > 1) {
+                    atomicAdd((int*)&compArray.entries[parentArrayIndex].minimum, 2);
                 }
                 --num_components;
             }

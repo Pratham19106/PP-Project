@@ -118,7 +118,7 @@ __global__ void FUNCTION_NAME(GlobalWorkList_shared_kernel)(Stacks<INT_OR_SHORT>
 
                 if (threadIdx.x == 0) {
                     s_current_depth = stackTop + 1;
-                    s_last_branched_degree = 9999;
+                    s_last_branched_degree = 0;
                 }
 
                 #if USE_COUNTERS

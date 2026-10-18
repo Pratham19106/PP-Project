@@ -137,14 +137,33 @@ for c in components:
     else:
         general_comps.append(c)
 
+def get_tree_mvc_size(subgraph):
+    """Exact greedy leaf-stripping MVC for trees/forests, matching CUDA Variant D."""
+    if subgraph.number_of_edges() == 0:
+        return 0
+    H = subgraph.copy()
+    cover_size = 0
+    while True:
+        leaves = [n for n, d in H.degree() if d == 1]
+        if not leaves:
+            break
+        leaf = leaves[0]
+        neighbors = list(H.neighbors(leaf))
+        if neighbors:
+            parent = neighbors[0]
+            cover_size += 1
+            H.remove_node(parent)
+        else:
+            H.remove_node(leaf)
+    return cover_size
+
 # Calculate fast-path covers
 analytic_cover_count = len(top_hubs)
 for c in cycle_comps:
     analytic_cover_count += (len(c) + 1) // 2
 for c in tree_comps:
-    # Acyclic greedy cover
     sub = G_shattered.subgraph(c)
-    analytic_cover_count += len(nx.min_weighted_vertex_cover(sub)) if sub.number_of_edges() > 0 else 0
+    analytic_cover_count += get_tree_mvc_size(sub)
 
 # Visual Plotting Function
 def build_network_figure(stage_mode):

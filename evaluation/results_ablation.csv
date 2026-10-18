@@ -1,0 +1,33 @@
+Graph,Variant,MVC_Size,Time_Sec,Status
+qc324,Variant_A_2022,320,0.7032,PASS
+qc324,Variant_B_2026,320,0.3633,PASS
+qc324,Variant_C_Lazy,320,0.371,PASS
+qc324,Variant_D_Full,320,0.3693,PASS
+mhda416,Variant_A_2022,256,176.0309,PASS
+mhda416,Variant_B_2026,256,60.0128,PASS
+mhda416,Variant_C_Lazy,256,58.0028,PASS
+mhda416,Variant_D_Full,256,59.2423,PASS
+c-fat500-5,Variant_A_2022,-1,180.0,TIMEOUT (>180s)
+c-fat500-5,Variant_B_2026,492,14.844,PASS
+c-fat500-5,Variant_C_Lazy,492,14.7981,PASS
+c-fat500-5,Variant_D_Full,492,14.9042,PASS
+power-eris1176,Variant_A_2022,-1,180.0,TIMEOUT (>180s)
+power-eris1176,Variant_B_2026,744,0.958,PASS
+power-eris1176,Variant_C_Lazy,744,0.9891,PASS
+power-eris1176,Variant_D_Full,744,0.9804,PASS
+web-spam,Variant_A_2022,2297,1.1846,PASS
+web-spam,Variant_B_2026,-1,180.0,TIMEOUT (>180s)
+web-spam,Variant_C_Lazy,2297,1.2385,PASS
+web-spam,Variant_D_Full,2297,1.0451,PASS
+US-power-grid,Variant_A_2022,2203,1.379,PASS
+US-power-grid,Variant_B_2026,2203,1.3047,PASS
+US-power-grid,Variant_C_Lazy,2203,1.0838,PASS
+US-power-grid,Variant_D_Full,2203,1.2477,PASS
+LastFM-Asia,Variant_A_2022,3447,1.3819,PASS
+LastFM-Asia,Variant_B_2026,3447,1.2983,PASS
+LastFM-Asia,Variant_C_Lazy,3447,1.3383,PASS
+LastFM-Asia,Variant_D_Full,3447,1.3329,PASS
+rajat28,Variant_A_2022,-1,180.0,FAILED (OOM / >180s)
+rajat28,Variant_B_2026,40546,55.4072,PASS
+rajat28,Variant_C_Lazy,40546,56.4301,PASS
+rajat28,Variant_D_Full,40546,56.4814,PASS

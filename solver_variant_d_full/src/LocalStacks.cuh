@@ -256,7 +256,7 @@ __global__ void FUNCTION_NAME(LocalStacks_shared_kernel)(Stacks<INT_OR_SHORT> st
 
                     if (threadIdx.x == 0) {
                         s_current_depth = startingDepth + stackTop + 1;
-                        s_last_branched_degree = 9999;
+                        s_last_branched_degree = 0;
                     }
 
                     #if USE_COUNTERS
@@ -391,6 +391,7 @@ __global__ void FUNCTION_NAME(LocalStacks_shared_kernel)(Stacks<INT_OR_SHORT> st
                     }
                     popNextItr = true;
                     __syncthreads();
+                } else {
                     if (threadIdx.x == 0) {
                         run_cc_scan = (s_current_depth == 0) || 
                                       (s_last_branched_degree >= LAZY_TAU) || 
