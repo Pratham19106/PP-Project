@@ -181,7 +181,7 @@ import os
 import subprocess
 
 DATA_DIR = "/content/PP-Project/component-aware-vertex-cover-gpu/data"
-TIMEOUT_SEC = 300  # 5-minute benchmark cutoff per variant (standard IEEE TPDS / IPDPS protocol)
+TIMEOUT_SEC = 180  # 3-minute benchmark cutoff per variant (standardized IEEE TPDS protocol)
 
 # Curated benchmarks covering Chemistry, Power Grids, Social, Cybersecurity, and Industrial Circuits
 BENCHMARKS = [
@@ -287,7 +287,7 @@ for idx, row in df_results.iterrows():
     expected = ground_truths.get(g)
     
     if "TIMEOUT" in status:
-        print(f"  [TIMEOUT] {g:<18} | {v:<16} | Timed out (>300s cutoff) | Ground Truth={expected}")
+        print(f"  [TIMEOUT] {g:<18} | {v:<16} | Timed out (>180s cutoff) | Ground Truth={expected}")
     elif expected is not None:
         if val == expected:
             print(f"  [PASS]    {g:<18} | {v:<16} | MVC={val} == Expected={expected}")
@@ -367,97 +367,18 @@ df_telemetry.head(10)""")
 
     # Cell 7: Publication-Quality Plot Generation
     add_code("""# 7. Generate High-Resolution Publication Figures (300 DPI)
-import matplotlib.pyplot as plt
-import numpy as np
+# Executes the standardized publication plotting suite (aligned with 180s timeout, OOM badges, and 4-variant curves)
+import os
+!python /content/PP-Project/evaluation/generate_publication_plots.py
 
+from IPython.display import Image, display
 FIGURES_DIR = "/content/PP-Project/paper/figures"
-os.makedirs(FIGURES_DIR, exist_ok=True)
-
-plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
-plt.rcParams.update({
-    'font.size': 12,
-    'axes.labelsize': 13,
-    'axes.titlesize': 14,
-    'xtick.labelsize': 11,
-    'ytick.labelsize': 11,
-    'figure.dpi': 300
-})
-
-pivot_time = df_results.pivot(index="Graph", columns="Variant", values="Time_Sec")
-benchmarks = list(pivot_time.index)
-x = np.arange(len(benchmarks))
-width = 0.22
-
-# Figure 1: Speedup vs 2026 Baseline
-plt.figure(figsize=(11, 5.5))
-speedup_c = pivot_time["Variant_B_2026"] / pivot_time["Variant_C_Lazy"]
-speedup_d = pivot_time["Variant_B_2026"] / pivot_time["Variant_D_Full"]
-
-plt.bar(x - width/2, speedup_c, width, label='Variant C (2026 + Lazy Trigger)', color='#3b82f6', edgecolor='black', alpha=0.85)
-plt.bar(x + width/2, speedup_d, width, label='Variant D (Proposed Full Solver)', color='#10b981', edgecolor='black', alpha=0.9)
-plt.axhline(1.0, color='#ef4444', linestyle='--', linewidth=1.5, label='2026 Baseline (1.0x)')
-
-plt.ylabel('Runtime Speedup Factor (x)')
-plt.title('End-to-End Speedup Relative to 2026 TPDS SOTA Baseline')
-plt.xticks(x, benchmarks, rotation=25, ha='right')
-plt.legend(frameon=True, loc='upper left')
-plt.tight_layout()
-fig1_p = os.path.join(FIGURES_DIR, "fig1_speedup_ablation.png")
-plt.savefig(fig1_p)
-plt.savefig(fig1_p.replace(".png", ".pdf"))
-plt.show()
-
-# Figure 2: Solve Time Comparison
-plt.figure(figsize=(11, 5.5))
-for col, col_name, marker, color in [
-    ("Variant_A_2022", "Variant A (2022 Baseline)", "^", "#ef4444"),
-    ("Variant_B_2026", "Variant B (2026 Baseline)", "s", "#f59e0b"),
-    ("Variant_C_Lazy", "Variant C (2026 + Lazy)", "d", "#3b82f6"),
-    ("Variant_D_Full", "Variant D (Proposed Solver)", "o", "#10b981")
-]:
-    if col in pivot_time.columns:
-        plt.plot(benchmarks, pivot_time[col], marker=marker, linewidth=2, label=col_name, color=color)
-
-plt.yscale('log')
-plt.ylabel('Total Solve Time in Seconds (Log Scale)')
-plt.title('Absolute Solve Time across Ablation Variants (Log Scale)')
-plt.xticks(rotation=25, ha='right')
-plt.legend(frameon=True)
-plt.grid(True, which="both", ls="--", alpha=0.5)
-plt.tight_layout()
-fig2_p = os.path.join(FIGURES_DIR, "fig2_solve_time_log.png")
-plt.savefig(fig2_p)
-plt.savefig(fig2_p.replace(".png", ".pdf"))
-plt.show()
-
-# Figure 3: Unproductive BFS Scans Reduction
-if 'df_telemetry' not in globals() or df_telemetry is None:
-    if os.path.exists("/content/PP-Project/evaluation/summary_telemetry.csv"):
-        try:
-            df_telemetry = pd.read_csv("/content/PP-Project/evaluation/summary_telemetry.csv")
-        except Exception:
-            df_telemetry = pd.DataFrame()
-    else:
-        df_telemetry = pd.DataFrame()
-
-if not df_telemetry.empty:
-    pivot_bfs = df_telemetry.pivot(index="Graph", columns="Variant", values="Unproductive_Pct")
-    plt.figure(figsize=(10, 5))
-    if "Variant_B_2026" in pivot_bfs.columns and "Variant_D_Full" in pivot_bfs.columns:
-        plt.bar(x - width/2, pivot_bfs["Variant_B_2026"], width, label='2026 Baseline Wasted Scans (%)', color='#f87171', edgecolor='black')
-        plt.bar(x + width/2, pivot_bfs["Variant_D_Full"], width, label='Proposed Solver Wasted Scans (%)', color='#60a5fa', edgecolor='black')
-        plt.ylabel('Unproductive BFS Scan Ratio (%)')
-        plt.title('Elimination of Unproductive Parallel BFS Scans')
-        plt.xticks(x, benchmarks, rotation=25, ha='right')
-        plt.ylim(0, 100)
-        plt.legend(frameon=True)
-        plt.tight_layout()
-        fig3_p = os.path.join(FIGURES_DIR, "fig3_bfs_overhead_reduction.png")
-        plt.savefig(fig3_p)
-        plt.savefig(fig3_p.replace(".png", ".pdf"))
-        plt.show()
-
-print(f"All publication figures exported to: {FIGURES_DIR}")""")
+for fig in ["fig1_speedup_ablation.png", "fig2_solve_time_log.png", "fig3_bfs_overhead_reduction.png", "fig4_nodes_explored.png"]:
+    p = os.path.join(FIGURES_DIR, fig)
+    if os.path.exists(p):
+        print(f"\\nDisplaying {fig}:")
+        display(Image(filename=p, width=800))
+""")
 
     # Cell 8: Download Results Package
     add_code("""# 8. Download Results & Publication Package
