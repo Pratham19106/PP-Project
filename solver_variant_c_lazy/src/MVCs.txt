@@ -16,3 +16,5 @@ MVC Results:
 - rajat18 41594
 - web-spam 2297
 - PROTEINS-full 26298
+- US-power-grid 2203
+- LastFM-Asia 3447

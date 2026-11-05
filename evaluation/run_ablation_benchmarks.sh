@@ -77,6 +77,7 @@ VARIANTS=(
     "Variant_B_2026:${ROOT_DIR}/component-aware-vertex-cover-gpu"
     "Variant_C_Lazy:${ROOT_DIR}/solver_variant_c_lazy"
     "Variant_D_Full:${ROOT_DIR}/solver_variant_d_full"
+    "Variant_E_WarpBitboard:${ROOT_DIR}/solver_variant_e_warp_bitparallel"
 )
 
 # 1. TIMING PASS (Accurate Wall-Clock Execution without atomic counter overhead)

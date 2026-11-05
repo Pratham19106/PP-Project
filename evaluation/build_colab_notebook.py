@@ -41,6 +41,7 @@ def create_notebook():
 - **Variant B (2026 Baseline):** Always-on component-aware GPU Branch-and-Bound with Component Branch Registry (Amro et al., IEEE TPDS 2026)
 - **Variant C (Addition 1 Only):** 2026 Baseline + Lazily Triggered Component Detection ($(\\text{deg}(v) \\ge \\tau) \\lor (d \\pmod S == 0)$)
 - **Variant D (Proposed Full Solver):** 2026 Baseline + Lazy Trigger + In-Block Analytic Tree & Cycle Fast-Path
+- **Variant E (Novel Architecture):** Dynamic CTA-to-Warp Morphing, Lock-Step Register Bitboard Engine & Disjoint Clique-Packing Oracle
 
 ---
 > ⚠️ **IMPORTANT: Set Colab Runtime to GPU before running!**  
@@ -155,7 +156,8 @@ VARIANTS = {
     "Variant_A_2022": "/content/PP-Project/Parallel-Vertex-Cover-Algorithms-on-GPUs",
     "Variant_B_2026": "/content/PP-Project/component-aware-vertex-cover-gpu",
     "Variant_C_Lazy": "/content/PP-Project/solver_variant_c_lazy",
-    "Variant_D_Full": "/content/PP-Project/solver_variant_d_full"
+    "Variant_D_Full": "/content/PP-Project/solver_variant_d_full",
+    "Variant_E_WarpBitboard": "/content/PP-Project/solver_variant_e_warp_bitparallel"
 }
 
 print("="*70)
@@ -311,7 +313,7 @@ else:
 # - In-block fast-path hits (Cycle and Tree fast paths)
 
 print("Recompiling Variant B, C, and D with USE_COUNTERS=1 for hardware profiling...")
-for name in ["Variant_B_2026", "Variant_C_Lazy", "Variant_D_Full"]:
+for name in ["Variant_B_2026", "Variant_C_Lazy", "Variant_D_Full", "Variant_E_WarpBitboard"]:
     configure_and_compile(VARIANTS[name], use_counters=1, arch=compute_arch)
 
 telemetry_records = []
@@ -319,7 +321,7 @@ for graph_file in BENCHMARKS:
     graph_path = os.path.join(DATA_DIR, graph_file)
     g_name = graph_file.replace(".txt", "")
     
-    for v_name in ["Variant_B_2026", "Variant_C_Lazy", "Variant_D_Full"]:
+    for v_name in ["Variant_B_2026", "Variant_C_Lazy", "Variant_D_Full", "Variant_E_WarpBitboard"]:
         src_dir = os.path.join(VARIANTS[v_name], "src")
         try:
             res = subprocess.run(f"./output -f {graph_path} -v hybrid", cwd=src_dir, shell=True, capture_output=True, text=True, timeout=300)
