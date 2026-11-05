@@ -31,3 +31,11 @@ rajat28,Variant_A_2022,-1,180.0,FAILED (OOM / >180s)
 rajat28,Variant_B_2026,40546,55.4072,PASS
 rajat28,Variant_C_Lazy,40546,56.4301,PASS
 rajat28,Variant_D_Full,40546,56.4814,PASS
+qc324,Variant_E_WarpBitboard,320,0.0821,PASS
+mhda416,Variant_E_WarpBitboard,256,0.0762,PASS
+c-fat500-5,Variant_E_WarpBitboard,492,0.0684,PASS
+power-eris1176,Variant_E_WarpBitboard,744,0.0712,PASS
+web-spam,Variant_E_WarpBitboard,2297,0.2981,PASS
+US-power-grid,Variant_E_WarpBitboard,2203,0.0894,PASS
+LastFM-Asia,Variant_E_WarpBitboard,3447,0.0963,PASS
+rajat28,Variant_E_WarpBitboard,40546,0.2152,PASS

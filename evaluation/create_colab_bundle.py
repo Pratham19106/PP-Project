@@ -2,6 +2,7 @@
 Creates a compact Colab deployment zip archive containing:
 - solver_variant_c_lazy (src only)
 - solver_variant_d_full (src only)
+- solver_variant_e_warp_bitparallel (src only)
 - evaluation scripts
 - project_netshield scripts
 - verification ground-truths
@@ -16,7 +17,7 @@ def create_bundle():
     
     print(f"Creating Colab deployment bundle: {output_zip} ...")
     with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as z:
-        for folder in ["solver_variant_c_lazy/src", "solver_variant_d_full/src", "evaluation", "project_netshield"]:
+        for folder in ["solver_variant_c_lazy/src", "solver_variant_d_full/src", "solver_variant_e_warp_bitparallel/src", "evaluation", "project_netshield"]:
             abs_folder = os.path.join(base_dir, folder)
             for root, dirs, files in os.walk(abs_folder):
                 # skip git, pycache, and existing zip files
@@ -35,4 +36,3 @@ def create_bundle():
 
 if __name__ == "__main__":
     create_bundle()
-
