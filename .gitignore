@@ -19,4 +19,5 @@ Thumbs.db
 # Temporary results / logs
 *.log
 *.zip
+extracted_results*/
 
